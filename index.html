@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI故事生成器</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif; background: #f5f5f5; min-height: 100vh; padding: 20px; }
+        .container { max-width: 900px; margin: 0 auto; background: white; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); padding: 40px; }
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px; }
+        h1 { font-size: 1.8em; color: #333; }
+        .settings-btn { padding: 10px 16px; background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 6px; cursor: pointer; font-size: 0.95em; transition: all 0.3s; }
+        .settings-btn:hover { background: #e9ecef; }
+        .sidebar { position: fixed; top: 0; right: -420px; width: 420px; height: 100vh; background: white; box-shadow: -2px 0 12px rgba(0,0,0,0.15); transition: right 0.3s ease; z-index: 1000; padding: 30px; overflow-y: auto; }
+        .sidebar.open { right: 0; }
+        .sidebar-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px; }
+        .sidebar-header h2 { font-size: 1.3em; color: #333; }
+        .close-btn { background: none; border: none; font-size: 1.5em; cursor: pointer; color: #666; }
+        .sidebar-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100vh; background: rgba(0,0,0,0.5); display: none; z-index: 999; }
+        .sidebar-overlay.show { display: block; }
+        .form-group { margin-bottom: 25px; }
+        label { display: block; margin-bottom: 8px; color: #495057; font-weight: 500; font-size: 0.95em; }
+        input[type="text"], input[type="password"], input[type="number"], textarea { width: 100%; padding: 12px; border: 1px solid #ced4da; border-radius: 6px; font-size: 0.95em; font-family: inherit; transition: border-color 0.3s; }
+        input:focus, textarea:focus { outline: none; border-color: #4a90e2; }
+        textarea { resize: vertical; min-height: 120px; }
+        .presets { margin-bottom: 25px; }
+        .presets-label { display: block; margin-bottom: 10px; color: #495057; font-weight: 500; font-size: 0.95em; }
+        .preset-btns { display: flex; gap: 8px; flex-wrap: wrap; }
+        .preset-btn { padding: 8px 16px; background: white; border: 1px solid #ced4da; border-radius: 20px; cursor: pointer; font-size: 0.85em; color: #495057; transition: all 0.3s; max-width: 200px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+        .favorite-btn { font-size: 0.75em; padding: 2px 8px; border: 1px solid #ced4da; border-radius: 4px; background: white; color: #6c757d; cursor: pointer; transition: all 0.2s; vertical-align: middle; }
+        .fetch-models-btn { font-size: 0.75em; padding: 2px 8px; border: 1px solid #ced4da; border-radius: 4px; background: white; color: #6c757d; cursor: pointer; transition: all 0.2s; vertical-align: middle; }
+        .fetch-models-btn:hover { background: #28a745; color: white; border-color: #28a745; }
+        .favorite-btn:hover { background: #4a90e2; color: white; border-color: #4a90e2; }
+        .preset-wrap { display: inline-flex; align-items: center; gap: 2px; }
+        .preset-del { font-size: 0.7em; padding: 2px 6px; border: none; border-radius: 10px; background: #e9ecef; color: #6c757d; cursor: pointer; transition: all 0.2s; line-height: 1; }
+        .preset-del:hover { background: #e53e3e; color: white; }
+        .preset-btn:hover { background: #4a90e2; color: white; border-color: #4a90e2; transform: translateY(-1px); }
+        .mode-selector { display: flex; gap: 15px; margin-bottom: 25px; }
+        .mode-option { flex: 1; }
+        .mode-option input[type="radio"] { display: none; }
+        .mode-option label { display: block; padding: 15px; border: 2px solid #dee2e6; border-radius: 6px; text-align: center; cursor: pointer; transition: all 0.3s; }
+        .mode-option input[type="radio"]:checked + label { border-color: #4a90e2; background: #e3f2fd; color: #1976d2; }
+        .chapter-settings { display: none; margin-top: 15px; padding: 15px; background: #f8f9fa; border-radius: 6px; }
+        .chapter-settings.show { display: block; }
+        .generate-btn { width: 100%; padding: 15px; background: #4a90e2; color: white; border: none; border-radius: 6px; font-size: 1.05em; font-weight: 600; cursor: pointer; transition: all 0.3s; margin-top: 20px; }
+        .generate-btn:hover { background: #357abd; }
+        .generate-btn:disabled { background: #adb5bd; cursor: not-allowed; }
+        .story-output { margin-top: 40px; padding-top: 40px; border-top: 2px solid #e9ecef; }
+        .story-output h2 { font-size: 1.3em; color: #333; margin-bottom: 20px; }
+        .story-content { padding: 25px; background: #f8f9fa; border-radius: 6px; line-height: 2; color: #333; white-space: pre-wrap; min-height: 200px; overflow-y: auto; max-height: 70vh; }
+        .story-content.empty { color: #adb5bd; text-align: center; font-style: italic; }
+        .loading { text-align: center; color: #6c757d; font-style: italic; }
+        .loading::after { content: "..."; animation: dots 1.5s steps(4, end) infinite; }
+        @keyframes dots { 0%, 20% { content: "."; } 40% { content: ".."; } 60%, 100% { content: "..."; } }
+        .chapter-nav { display: none; margin-top: 20px; gap: 10px; justify-content: center; }
+        .chapter-nav.show { display: flex; }
+        .chapter-btn { padding: 10px 20px; background: white; border: 1px solid #dee2e6; border-radius: 6px; cursor: pointer; transition: all 0.3s; }
+        .chapter-btn:hover { background: #f8f9fa; }
+        .chapter-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        .export-btn { margin-top: 15px; padding: 10px 20px; background: white; border: 1px solid #dee2e6; border-radius: 6px; cursor: pointer; transition: all 0.3s; }
+        .export-btn:hover { background: #f8f9fa; }
+        .cursor-blink { display: inline-block; width: 2px; height: 1.2em; background: #4a90e2; margin-left: 2px; vertical-align: text-bottom; animation: blink 0.8s infinite; }
+        @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
+        @media (max-width: 768px) {
+            .container { padding: 20px; }
+            .sidebar { width: 100%; right: -100%; }
+            h1 { font-size: 1.5em; }
+            .mode-selector { flex-direction: column; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>AI故事生成器</h1>
+            <button class="settings-btn" onclick="openSettings()">⚙️ 设置</button>
+        </div>
+        <div class="mode-selector">
+            <div class="mode-option">
+                <input type="radio" id="longMode" name="mode" value="long" checked>
+                <label for="longMode"><strong>单片长篇</strong><br><small>一次生成2万字完整故事</small></label>
+            </div>
+            <div class="mode-option">
+                <input type="radio" id="chapterMode" name="mode" value="chapter">
+                <label for="chapterMode"><strong>多章模式</strong><br><small>按章节生成故事</small></label>
+            </div>
+        </div>
+        <div class="chapter-settings" id="chapterSettings">
+            <label for="chapterLength">单章字数</label>
+            <input type="number" id="chapterLength" value="2000" min="500" max="5000" step="500">
+        </div>
+        <div class="presets" id="presetsSection" style="display:none;">
+            <label class="presets-label">常用预设</label>
+            <div class="preset-btns" id="presetBtns"></div>
+        </div>
+        <div class="form-group">
+            <label for="plot">剧情设定 <button class="favorite-btn" onclick="addFavoritePreset()" title="将当前设定收藏为常用预设">设为常用</button></label>
+            <textarea id="plot" placeholder="在这里输入你想要的故事情节..."></textarea>
+        </div>
+        <button class="generate-btn" id="generateBtn" onclick="generateStory()">生成故事</button>
+        <div class="story-output" id="storyOutput" style="display: none;">
+            <h2>生成的故事</h2>
+            <div class="story-content empty" id="storyContent">故事生成后将显示在这里...</div>
+            <div class="chapter-nav" id="chapterNav">
+                <button class="chapter-btn" onclick="generateNextChapter()">生成下一章</button>
+            </div>
+            <button class="export-btn" onclick="exportStory()">💾 导出故事</button>
+        </div>
+    </div>
+    <div class="sidebar-overlay" id="sidebarOverlay" onclick="closeSettings()"></div>
+    <div class="sidebar" id="sidebar">
+        <div class="sidebar-header">
+            <h2>设置</h2>
+            <button class="close-btn" onclick="closeSettings()">✕</button>
+        </div>
+        <div class="form-group">
+            <label for="worldbook">世界书 <button class="favorite-btn" onclick="addFavoritePreset()" title="将当前设定收藏为常用预设">设为常用</button></label>
+            <textarea id="worldbook" placeholder="世界观、背景设定..." style="min-height:150px;"></textarea>
+        </div>
+        <div class="form-group">
+            <label for="apiKey">API密钥</label>
+            <input type="password" id="apiKey" placeholder="输入你的API密钥">
+            <small style="color: #6c757d; display: block; margin-top: 5px;">密钥将保存在本地浏览器，不会上传</small>
+        </div>
+        <div class="form-group">
+            <label for="apiUrl">API地址（可选）</label>
+            <input type="text" id="apiUrl" placeholder="例如：https://api.deepseek.com">
+            <small style="color: #6c757d; display: block; margin-top: 5px;">只需填写基础地址，支持任何OpenAI兼容的API</small>
+        </div>
+        <div class="form-group">
+            <label for="modelName">模型名称（可选） <button class="fetch-models-btn" onclick="fetchModels()" title="从API获取可用模型列表">获取</button></label>
+            <select id="modelName" style="width:100%;padding:12px;border:1px solid #ced4da;border-radius:6px;font-size:0.95em;font-family:inherit;color:#495057;">
+                <option value="">请先获取模型列表...</option>
+            </select>
+        </div>
+        <button class="generate-btn" onclick="saveSettings()">保存设置</button>
+    </div>
+    <script>
+        const MAX_PRESETS = 3;
+
+        function loadPresets() {
+            try { const saved = JSON.parse(localStorage.getItem("storyPresets") || "[]"); renderPresets(saved); } catch(e) { renderPresets([]); }
+        }
+
+        function addFavoritePreset() {
+            const plot = document.getElementById("plot").value.trim();
+            const worldbook = document.getElementById("worldbook").value.trim();
+            if (!plot) { alert("请先输入剧情设定！"); return; }
+            let saved = [];
+            try { saved = JSON.parse(localStorage.getItem("storyPresets") || "[]"); } catch(e) {}
+            if (saved.some(p => p.plot === plot)) { alert("这个剧情已经在常用预设中了！"); return; }
+            if (saved.length >= MAX_PRESETS) { saved.pop(); }
+            saved.unshift({ plot, worldbook });
+            localStorage.setItem("storyPresets", JSON.stringify(saved));
+            renderPresets(saved);
+        }
+
+        function removePreset(idx) {
+            let saved = [];
+            try { saved = JSON.parse(localStorage.getItem("storyPresets") || "[]"); } catch(e) { return; }
+            if (idx >= 0 && idx < saved.length) {
+                saved.splice(idx, 1);
+                localStorage.setItem("storyPresets", JSON.stringify(saved));
+                renderPresets(saved);
+            }
+        }
+
+        function renderPresets(saved) {
+            const section = document.getElementById("presetsSection");
+            const container = document.getElementById("presetBtns");
+            if (saved.length === 0) { section.style.display = "none"; return; }
+            section.style.display = "block";
+            container.innerHTML = saved.map((item, idx) => {
+                const label = item.plot.length > 15 ? item.plot.slice(0, 13) + "..." : item.plot;
+                return '<span class="preset-wrap"><button class="preset-btn" onclick="applyHistoryPreset(' + idx + ')">' + label + '</button><button class="preset-del" onclick="event.stopPropagation();removePreset(' + idx + ')" title="删除">x</button></span>';
+            }).join("");
+        }
+
+        function applyHistoryPreset(idx) {
+            let saved = [];
+            try { saved = JSON.parse(localStorage.getItem("storyPresets") || "[]"); } catch(e) { return; }
+            if (idx >= 0 && idx < saved.length) {
+                document.getElementById("plot").value = saved[idx].plot;
+                document.getElementById("worldbook").value = saved[idx].worldbook || "";
+            }
+        }
+
+        let currentMode = "long";
+
+        // --- Stream SSE response ---
+        async function streamResponse(response, onChunk) {
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
+            let buffer = "";
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                buffer += decoder.decode(value, { stream: true });
+                const lines = buffer.split("\n");
+                buffer = lines.pop() || "";
+                for (const line of lines) {
+                    const t = line.trim();
+                    if (!t || !t.startsWith("data: ")) continue;
+                    const d = t.slice(6);
+                    if (d === "[DONE]") return;
+                    try { const j = JSON.parse(d); const c = j.choices?.[0]?.delta?.content; if (c) onChunk(c); } catch (e) {}
+                }
+            }
+        }
+
+        function buildPrompt(plot, worldbook, wordCount, previousStory) {
+            if (previousStory) {
+                return "根据以下设定继续创作故事的下一章：\n\n世界设定：" + worldbook + "\n\n剧情设定：" + plot + "\n\n前面的章节：\n" + previousStory + "\n\n请创作大约" + wordCount + "字的下一章内容，自然承接前文。";
+            }
+            return "根据以下设定创作一个故事：\n\n世界设定：" + worldbook + "\n\n剧情设定：" + plot + "\n\n请创作一个大约" + wordCount + "字的故事。";
+        }
+
+        function buildApiOptions(prompt) {
+            const apiKey = localStorage.getItem("apiKey");
+            const modelName = localStorage.getItem("modelName") || "deepseek-chat";
+            let apiUrl = localStorage.getItem("apiUrl") || "https://api.deepseek.com";
+            // Normalize: strip trailing slash, strip existing /v1, strip /chat/completions, then append
+            apiUrl = apiUrl.replace(/\/+$/, "").replace(/\/v1$/, "").replace(/\/chat\/completions$/, "");
+            apiUrl += "/v1/chat/completions";
+            return {
+                apiUrl: apiUrl,
+                fetchOptions: {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json", "Authorization": "Bearer " + apiKey },
+                    body: JSON.stringify({
+                        model: modelName,
+                        messages: [
+                            { role: "system", content: "你是一个优秀的故事创作者，擅长根据设定创作引人入胜的故事。" },
+                            { role: "user", content: prompt }
+                        ],
+                        temperature: 0.8,
+                        stream: true
+                    })
+                }
+            };
+        }
+
+        let chapterCount = 0;
+        let allChapters = [];
+
+        window.addEventListener("load", () => {
+            const savedApiKey = localStorage.getItem("apiKey");
+            const savedApiUrl = localStorage.getItem("apiUrl");
+            const savedModel = localStorage.getItem("modelName");
+            if (savedApiKey) document.getElementById("apiKey").value = savedApiKey;
+            if (savedApiUrl) document.getElementById("apiUrl").value = savedApiUrl;
+            if (savedModel) document.getElementById("modelName").value = savedModel;
+            loadPresets();
+        });
+
+        document.querySelectorAll('input[name="mode"]').forEach(radio => {
+            radio.addEventListener("change", (e) => {
+                currentMode = e.target.value;
+                document.getElementById("chapterSettings").classList.toggle("show", currentMode === "chapter");
+            });
+        });
+        function openSettings() {
+            document.getElementById("sidebar").classList.add("open");
+            document.getElementById("sidebarOverlay").classList.add("show");
+        }
+
+        function closeSettings() {
+            document.getElementById("sidebar").classList.remove("open");
+            document.getElementById("sidebarOverlay").classList.remove("show");
+        }
+
+        async function fetchModels() {
+            const apiUrl = document.getElementById("apiUrl").value.trim();
+            const apiKey = document.getElementById("apiKey").value.trim();
+            if (!apiUrl || !apiKey) { alert("请先填写API地址和密钥！"); return; }
+            let baseUrl = apiUrl.replace(/\/+$/, "");
+            if (baseUrl.includes("/chat/completions")) { baseUrl = baseUrl.replace(/\/chat\/completions\/?$/, ""); }
+            else if (baseUrl.includes("/completions")) { baseUrl = baseUrl.replace(/\/completions\/?$/, ""); }
+            if (!baseUrl.endsWith("/v1")) { baseUrl += "/v1"; }
+
+            const btn = document.querySelector(".fetch-models-btn");
+            btn.textContent = "获取中..."; btn.disabled = true;
+
+            try {
+                const resp = await fetch(baseUrl + "/models", { headers: { "Authorization": "Bearer " + apiKey } });
+                if (!resp.ok) throw new Error("HTTP " + resp.status);
+                const data = await resp.json();
+                const select = document.getElementById("modelName");
+                const models = (data.data || []).map(m => m.id).sort();
+                select.innerHTML = models.map(id => '<option value="' + id + '">' + id + '</option>').join("");
+                if (models.length === 0) { select.innerHTML = '<option value="">未获取到模型</option>'; alert("未获取到模型列表"); }
+                else { select.value = models[0]; btn.textContent = "已获取(" + models.length + "个)"; }
+            } catch(e) {
+                alert("获取失败: " + e.message);
+                btn.textContent = "获取";
+            } finally { btn.disabled = false; }
+        }
+
+        function saveSettings() {
+            localStorage.setItem("apiKey", document.getElementById("apiKey").value);
+            localStorage.setItem("apiUrl", document.getElementById("apiUrl").value);
+            localStorage.setItem("modelName", document.getElementById("modelName").value);
+            alert("设置已保存！");
+            closeSettings();
+        }
+
+        async function generateStory() {
+            const apiKey = localStorage.getItem("apiKey");
+            if (!apiKey) { alert("请先在设置中配置API密钥！"); openSettings(); return; }
+
+            const plot = document.getElementById("plot").value.trim();
+            const worldbook = document.getElementById("worldbook").value.trim();
+            if (!plot) { alert("请输入剧情设定！"); return; }
+
+            const generateBtn = document.getElementById("generateBtn");
+            const storyOutput = document.getElementById("storyOutput");
+            const storyContent = document.getElementById("storyContent");
+            const chapterNav = document.getElementById("chapterNav");
+
+            generateBtn.disabled = true;
+            generateBtn.textContent = "生成中...";
+            storyOutput.style.display = "block";
+            chapterCount = 0;
+            allChapters = [];
+            chapterNav.classList.remove("show");
+            storyContent.className = "story-content";
+            storyContent.textContent = "";
+
+            try {
+                const wordCount = currentMode === "long" ? 20000 : parseInt(document.getElementById("chapterLength").value);
+                const prompt = buildPrompt(plot, worldbook, wordCount, "");
+                const { apiUrl, fetchOptions } = buildApiOptions(prompt);
+
+                const resp = await fetch(apiUrl, fetchOptions);
+                if (!resp.ok) {
+                    const text = await resp.text();
+                    let msg = "HTTP " + resp.status + " (" + apiUrl + ")";
+                    try { const err = JSON.parse(text); msg += ": " + (err.error?.message || err.message || text.slice(0, 100)); }
+                    catch (e) { msg += ": " + (text.slice(0, 100) || "(空响应)"); }
+                    throw new Error(msg);
+                }
+
+                let fullText = "";
+                await streamResponse(resp, function(chunk) {
+                    fullText += chunk;
+                    storyContent.textContent = fullText;
+                });
+
+                if (currentMode === "chapter") {
+                    chapterCount = 1;
+                    allChapters.push(fullText);
+                    chapterNav.classList.add("show");
+                }
+            } catch (error) {
+                storyContent.className = "story-content";
+                storyContent.textContent = "生成失败：" + error.message;
+            } finally {
+                generateBtn.disabled = false;
+                generateBtn.textContent = "生成故事";
+            }
+        }
+
+        async function generateNextChapter() {
+            const plot = document.getElementById("plot").value.trim();
+            const worldbook = document.getElementById("worldbook").value.trim();
+            const chapterLength = parseInt(document.getElementById("chapterLength").value);
+            const storyContent = document.getElementById("storyContent");
+            const previousStory = allChapters.join("\n\n");
+            const generateBtn = document.getElementById("generateBtn");
+
+            storyContent.className = "story-content";
+            storyContent.textContent = previousStory + "\n\n";
+            generateBtn.disabled = true;
+            generateBtn.textContent = "生成中...";
+
+            try {
+                const prompt = buildPrompt(plot, worldbook, chapterLength, previousStory);
+                const { apiUrl, fetchOptions } = buildApiOptions(prompt);
+                const resp = await fetch(apiUrl, fetchOptions);
+                if (!resp.ok) {
+                    const text = await resp.text();
+                    let msg = "HTTP " + resp.status + " (" + apiUrl + ")";
+                    try { const err = JSON.parse(text); msg += ": " + (err.error?.message || err.message || text.slice(0, 100)); }
+                    catch (e) { msg += ": " + (text.slice(0, 100) || "(空响应)"); }
+                    throw new Error(msg);
+                }
+
+                let newChapter = "";
+                await streamResponse(resp, function(chunk) {
+                    newChapter += chunk;
+                    storyContent.textContent = previousStory + "\n\n---\n\n" + newChapter;
+                });
+
+                chapterCount++;
+                allChapters.push(newChapter);
+            } catch (error) {
+                storyContent.className = "story-content";
+                storyContent.textContent = previousStory + "\n\n生成失败：" + error.message;
+            } finally {
+                generateBtn.disabled = false;
+                generateBtn.textContent = "生成故事";
+            }
+        }
+
+        function exportStory() {
+            const storyContent = document.getElementById("storyContent").textContent;
+            if (!storyContent || storyContent.includes("故事生成后将显示在这里")) {
+                alert("还没有故事可以导出！");
+                return;
+            }
+            const blob = new Blob([storyContent], { type: "text/plain;charset=utf-8" });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = "AI\u751f\u6210\u6545\u4e8b_" + new Date().toLocaleDateString() + ".txt";
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+    </script>
+</body>
+</html>
