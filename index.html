@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
@@ -86,7 +86,11 @@
                 <label for="chapterMode"><strong>多章模式</strong><br><small>按章节生成故事</small></label>
             </div>
         </div>
-        <div class="chapter-settings" id="chapterSettings">`n            <label for="totalChapters">总章节数</label>`n            <input type="number" id="totalChapters" value="5" min="1" max="20" step="1">
+        <div class="chapter-settings" id="chapterSettings">
+            <div class="form-group">
+                <label for="totalChapters">总章节数</label>
+                <input type="number" id="totalChapters" value="5" min="1" max="20" step="1">
+            </div>
             <label for="chapterLength">单章字数</label>
             <input type="number" id="chapterLength" value="2000" min="500" max="5000" step="500">
         </div>
@@ -102,7 +106,8 @@
         <div class="story-output" id="storyOutput" style="display: none;">
             <h2>生成的故事</h2>
             <div class="story-content empty" id="storyContent">故事生成后将显示在这里...</div>
-            <div class="chapter-info" id="chapterInfo" style="text-align:center;margin-top:15px;color:#6c757d;display:none;">已生成 <span id="currentChapter">1</span> / <span id="maxChapters">5</span> 章</div>`n            <div class="chapter-nav" id="chapterNav">
+            <div class="chapter-progress" id="chapterProgress" style="text-align:center;margin-top:15px;color:#6c757d;display:none;">第 <span id="currentChapter">1</span> / <span id="maxChapters">5</span> 章</div>
+            <div class="chapter-nav" id="chapterNav">
                 <button class="chapter-btn" onclick="generateNextChapter()">生成下一章</button>
             </div>
             <button class="export-btn" onclick="exportStory()">💾 导出故事</button>
@@ -349,8 +354,11 @@
 
                 if (currentMode === "chapter") {
                     chapterCount = 1;
-                    allChapters.push(fullText);`n                    document.getElementById("currentChapter").textContent = chapterCount;`n                    document.getElementById("maxChapters").textContent = document.getElementById("totalChapters").value;`n                    document.getElementById("chapterInfo").style.display = "block";
+                    allChapters.push(fullText);
                     chapterNav.classList.add("show");
+                    document.getElementById("chapterProgress").style.display = "block";
+                    document.getElementById("maxChapters").textContent = document.getElementById("totalChapters").value;
+                    document.getElementById("currentChapter").textContent = chapterCount;
                 }
             } catch (error) {
                 storyContent.className = "story-content";
@@ -361,7 +369,9 @@
             }
         }
 
-        async function generateNextChapter() {`n            const totalChapters = parseInt(document.getElementById("totalChapters").value);`n            if (chapterCount >= totalChapters) {`n                alert("已完成全部章节！");`n                return;`n            }
+        async function generateNextChapter() {
+            const totalChapters = parseInt(document.getElementById("totalChapters").value);
+            if (chapterCount >= totalChapters) { alert("已完成全部章节！"); return; }
             const plot = document.getElementById("plot").value.trim();
             const worldbook = document.getElementById("worldbook").value.trim();
             const chapterLength = parseInt(document.getElementById("chapterLength").value);
@@ -393,7 +403,12 @@
                 });
 
                 chapterCount++;
-                allChapters.push(newChapter);`n                document.getElementById("currentChapter").textContent = chapterCount;`n                document.getElementById("chapterInfo").style.display = "block";`n                if (chapterCount >= parseInt(document.getElementById("totalChapters").value)) {`n                    document.querySelector(".chapter-btn").disabled = true;`n                    document.querySelector(".chapter-btn").textContent = "已完成全部章节";`n                }
+                allChapters.push(newChapter);
+                document.getElementById("currentChapter").textContent = chapterCount;
+                if (chapterCount >= totalChapters) {
+                    document.querySelector(".chapter-btn").disabled = true;
+                    document.querySelector(".chapter-btn").textContent = "已完成全部章节";
+                }
             } catch (error) {
                 storyContent.className = "story-content";
                 storyContent.textContent = previousStory + "\n\n生成失败：" + error.message;
