@@ -62,9 +62,26 @@
         .export-btn:hover { background: #f8f9fa; }
         .cursor-blink { display: inline-block; width: 2px; height: 1.2em; background: #4a90e2; margin-left: 2px; vertical-align: text-bottom; animation: blink 0.8s infinite; }
         @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
+        .left-sidebar { position: fixed; top: 0; left: -380px; width: 380px; height: 100vh; background: white; box-shadow: 2px 0 12px rgba(0,0,0,0.15); transition: left 0.3s ease; z-index: 1000; padding: 30px; overflow-y: auto; }
+        .left-sidebar.open { left: 0; }
+        .left-sidebar-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100vh; background: rgba(0,0,0,0.5); display: none; z-index: 999; }
+        .left-sidebar-overlay.show { display: block; }
+        .idea-output { margin-top: 15px; padding: 15px; background: #f8f9fa; border-radius: 6px; line-height: 1.6; color: #333; white-space: pre-wrap; min-height: 100px; max-height: 50vh; overflow-y: auto; display: none; }
+        .idea-tabs { display: flex; gap: 0; margin-bottom: 20px; border-bottom: 2px solid #e9ecef; }
+        .idea-tab { flex: 1; padding: 10px 8px; text-align: center; cursor: pointer; border: none; background: none; font-size: 0.85em; color: #6c757d; border-bottom: 2px solid transparent; margin-bottom: -2px; transition: all 0.3s; }
+        .idea-tab.active { color: #28a745; border-bottom-color: #28a745; font-weight: 600; }
+        .idea-tab:hover { color: #28a745; }
+        .idea-panel { display: none; }
+        .idea-panel.active { display: block; }
+        .idea-btn { width: 100%; padding: 12px; background: #28a745; color: white; border: none; border-radius: 6px; font-size: 1em; font-weight: 600; cursor: pointer; transition: all 0.3s; margin-top: 15px; }
+        .idea-btn:hover { background: #218838; }
+        .idea-btn:disabled { background: #adb5bd; cursor: not-allowed; }
+        .use-idea-btn { width: 100%; padding: 10px; background: white; border: 1px solid #28a745; color: #28a745; border-radius: 6px; cursor: pointer; margin-top: 10px; transition: all 0.3s; display: none; }
+        .use-idea-btn:hover { background: #28a745; color: white; }
         @media (max-width: 768px) {
             .container { padding: 20px; }
             .sidebar { width: 100%; right: -100%; }
+            .left-sidebar { width: 100%; left: -100%; }
             h1 { font-size: 1.5em; }
             .mode-selector { flex-direction: column; }
         }
@@ -73,6 +90,7 @@
 <body>
     <div class="container">
         <div class="header">
+            <button class="settings-btn" onclick="openIdeaBar()">💡 构思</button>
             <h1>AI故事生成器</h1>
             <button class="settings-btn" onclick="openSettings()">⚙️ 设置</button>
         </div>
@@ -111,6 +129,42 @@
                 <button class="chapter-btn" onclick="generateNextChapter()">生成下一章</button>
             </div>
             <button class="export-btn" onclick="exportStory()">💾 导出故事</button>
+        </div>
+    </div>
+    <div class="left-sidebar-overlay" id="leftSidebarOverlay" onclick="closeIdeaBar()"></div>
+    <div class="left-sidebar" id="leftSidebar">
+        <div class="sidebar-header">
+            <h2>剧情构思</h2>
+            <button class="close-btn" onclick="closeIdeaBar()">✕</button>
+        </div>
+        <div class="idea-tabs">
+            <button class="idea-tab active" onclick="switchIdeaTab(0)">头脑风暴</button>
+            <button class="idea-tab" onclick="switchIdeaTab(1)">关键词构思</button>
+            <button class="idea-tab" onclick="switchIdeaTab(2)">仿写剧情</button>
+        </div>
+        <div class="idea-panel active" id="ideaPanel0">
+            <p style="color:#6c757d;font-size:0.9em;margin-bottom:15px;">AI自由发挥，随机生成创意剧情设定。</p>
+            <button class="idea-btn" id="ideaBtn0" onclick="generateIdea(0)">开始头脑风暴</button>
+            <div class="idea-output" id="ideaOutput0"></div>
+            <button class="use-idea-btn" id="useIdeaBtn0" onclick="useIdea(0)">导入到剧情设定</button>
+        </div>
+        <div class="idea-panel" id="ideaPanel1">
+            <div class="form-group">
+                <label for="ideaInput1">输入关键词或想法</label>
+                <textarea id="ideaInput1" placeholder="例如：一个失忆的刺客在古代长安城醒来..." style="min-height:100px;"></textarea>
+            </div>
+            <button class="idea-btn" id="ideaBtn1" onclick="generateIdea(1)">生成剧情构思</button>
+            <div class="idea-output" id="ideaOutput1"></div>
+            <button class="use-idea-btn" id="useIdeaBtn1" onclick="useIdea(1)">导入到剧情设定</button>
+        </div>
+        <div class="idea-panel" id="ideaPanel2">
+            <div class="form-group">
+                <label for="ideaInput2">粘贴参考剧情文本</label>
+                <textarea id="ideaInput2" placeholder="粘贴一段你喜欢的剧情或故事文本，AI会生成类似风格的新剧情..." style="min-height:120px;"></textarea>
+            </div>
+            <button class="idea-btn" id="ideaBtn2" onclick="generateIdea(2)">生成类似剧情</button>
+            <div class="idea-output" id="ideaOutput2"></div>
+            <button class="use-idea-btn" id="useIdeaBtn2" onclick="useIdea(2)">导入到剧情设定</button>
         </div>
     </div>
     <div class="sidebar-overlay" id="sidebarOverlay" onclick="closeSettings()"></div>
@@ -224,6 +278,78 @@
                 return "根据以下设定继续创作故事的下一章：\n\n世界设定：" + worldbook + "\n\n剧情设定：" + plot + "\n\n前面的章节：\n" + previousStory + "\n\n请创作大约" + wordCount + "字的下一章内容，自然承接前文。";
             }
             return "根据以下设定创作一个故事：\n\n世界设定：" + worldbook + "\n\n剧情设定：" + plot + "\n\n请创作一个大约" + wordCount + "字的故事。";
+        }
+
+        function openIdeaBar() {
+            document.getElementById("leftSidebar").classList.add("open");
+            document.getElementById("leftSidebarOverlay").classList.add("show");
+        }
+
+        function closeIdeaBar() {
+            document.getElementById("leftSidebar").classList.remove("open");
+            document.getElementById("leftSidebarOverlay").classList.remove("show");
+        }
+
+        function switchIdeaTab(idx) {
+            document.querySelectorAll(".idea-tab").forEach((t, i) => t.classList.toggle("active", i === idx));
+            document.querySelectorAll(".idea-panel").forEach((p, i) => p.classList.toggle("active", i === idx));
+        }
+
+        async function generateIdea(mode) {
+            const apiKey = localStorage.getItem("apiKey");
+            if (!apiKey) { alert("请先在设置中配置API密钥！"); openSettings(); return; }
+            const ideaBtn = document.getElementById("ideaBtn" + mode);
+            const ideaOutput = document.getElementById("ideaOutput" + mode);
+            const useIdeaBtn = document.getElementById("useIdeaBtn" + mode);
+            let prompt = "";
+            if (mode === 0) {
+                prompt = "请自由发挥，头脑风暴一个有创意的故事剧情设定。要求新颖、出人意料，包含主角设定、世界观、核心冲突和结局走向。用中文回复。";
+            } else if (mode === 1) {
+                const input = document.getElementById("ideaInput1").value.trim();
+                if (!input) { alert("请输入关键词或想法！"); return; }
+                prompt = "请根据以下关键词或想法，构思一个详细的剧情设定，包括主角、背景、冲突和结局方向，用中文回复：\n\n" + input;
+            } else if (mode === 2) {
+                const input = document.getElementById("ideaInput2").value.trim();
+                if (!input) { alert("请粘贴参考剧情文本！"); return; }
+                prompt = "请阅读以下剧情文本，理解其风格、结构和主题，然后创作一个类似风格但内容全新的剧情设定。要求不是抄袭而是借鉴风格，用中文回复：\n\n" + input;
+            }
+            ideaBtn.disabled = true;
+            ideaBtn.textContent = "构思中...";
+            ideaOutput.style.display = "block";
+            ideaOutput.textContent = "正在构思剧情...";
+            useIdeaBtn.style.display = "none";
+            try {
+                const { apiUrl, fetchOptions } = buildApiOptions(prompt);
+                const resp = await fetch(apiUrl, fetchOptions);
+                if (!resp.ok) {
+                    const text = await resp.text();
+                    throw new Error("HTTP " + resp.status + ": " + text.slice(0, 100));
+                }
+                let fullText = "";
+                ideaOutput.textContent = "";
+                await streamResponse(resp, function(chunk) {
+                    fullText += chunk;
+                    ideaOutput.textContent = fullText;
+                });
+                useIdeaBtn.style.display = "block";
+            } catch(error) {
+                ideaOutput.textContent = "构思失败：" + error.message;
+            } finally {
+                ideaBtn.disabled = false;
+                const labels = ["开始头脑风暴", "生成剧情构思", "生成类似剧情"];
+                ideaBtn.textContent = labels[mode];
+            }
+        }
+
+        function useIdea(mode) {
+            const ideaText = document.getElementById("ideaOutput" + mode).textContent;
+            if (ideaText && !ideaText.startsWith("正在") && !ideaText.startsWith("构思失败")) {
+                document.getElementById("plot").value = ideaText;
+                closeIdeaBar();
+                alert("已导入到剧情设定！");
+            } else {
+                alert("还没有可导入的内容！");
+            }
         }
 
         function buildApiOptions(prompt) {
