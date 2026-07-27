@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
@@ -48,8 +48,62 @@
         .generate-btn:disabled { background: #adb5bd; cursor: not-allowed; }
         .story-output { margin-top: 40px; padding-top: 40px; border-top: 2px solid #e9ecef; }
         .story-output h2 { font-size: 1.3em; color: #333; margin-bottom: 20px; }
-        .story-content { padding: 25px; background: #f8f9fa; border-radius: 6px; line-height: 1.6; color: #333; white-space: pre-wrap; min-height: 200px; overflow-y: auto; max-height: 70vh; }
+        .story-content { 
+            padding: 25px; 
+            background: #f8f9fa; 
+            border-radius: 6px; 
+            line-height: 1.8; 
+            color: #333; 
+            white-space: pre-wrap; 
+            min-height: 200px; 
+            height: 60vh; 
+            overflow-y: auto; 
+            position: relative;
+            border: 1px solid #dee2e6;
+            font-size: 1.05em;
+        }
         .story-content.empty { color: #adb5bd; text-align: center; font-style: italic; }
+        
+        .pagination-controls {
+            display: none;
+            align-items: center;
+            justify-content: center;
+            gap: 15px;
+            margin-top: 20px;
+            padding: 15px;
+            background: white;
+            border-radius: 6px;
+            border: 1px solid #dee2e6;
+        }
+        .pagination-controls.show { display: flex; }
+        .page-btn {
+            padding: 8px 16px;
+            background: white;
+            border: 1px solid #dee2e6;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-size: 0.9em;
+        }
+        .page-btn:hover:not(:disabled) { background: #4a90e2; color: white; border-color: #4a90e2; }
+        .page-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+        .page-info {
+            font-size: 0.95em;
+            color: #495057;
+            font-weight: 500;
+            min-width: 120px;
+            text-align: center;
+        }
+        .chapter-status {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 0.85em;
+            margin-left: 8px;
+        }
+        .chapter-status.complete { background: #d4edda; color: #155724; }
+        .chapter-status.generating { background: #fff3cd; color: #856404; animation: pulse 1.5s ease-in-out infinite; }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.6; } }
         .loading { text-align: center; color: #6c757d; font-style: italic; }
         .loading::after { content: "..."; animation: dots 1.5s steps(4, end) infinite; }
         @keyframes dots { 0%, 20% { content: "."; } 40% { content: ".."; } 60%, 100% { content: "..."; } }
@@ -124,6 +178,10 @@
         <div class="story-output" id="storyOutput" style="display: none;">
             <h2>生成的故事</h2>
             <div class="story-content empty" id="storyContent">故事生成后将显示在这里...</div>
+            <div class="scroll-nav-btns" id="scrollNavBtns">
+                <button class="scroll-nav-btn" onclick="scrollToTop()">↑ 回到顶部</button>
+                <button class="scroll-nav-btn" onclick="scrollToBottom()">↓ 跳到最新</button>
+            </div>
             <div class="chapter-progress" id="chapterProgress" style="text-align:center;margin-top:15px;color:#6c757d;display:none;">第 <span id="currentChapter">1</span> / <span id="maxChapters">5</span> 章</div>
             <div class="chapter-nav" id="chapterNav">
                 <button class="chapter-btn" onclick="generateNextChapter()">生成下一章</button>
@@ -253,7 +311,8 @@
         let currentMode = "long";
 
         // --- Stream SSE response ---
-        async function streamResponse(response, onChunk) {
+        async function streamResponse(response, onChunk, autoScroll = true) {
+            let accumulatedContent = "";
             const reader = response.body.getReader();
             const decoder = new TextDecoder();
             let buffer = "";
@@ -268,7 +327,14 @@
                     if (!t || !t.startsWith("data: ")) continue;
                     const d = t.slice(6);
                     if (d === "[DONE]") return;
-                    try { const j = JSON.parse(d); const c = j.choices?.[0]?.delta?.content; if (c) onChunk(c); } catch (e) {}
+                    try { 
+                        const j = JSON.parse(d); 
+                        const c = j.choices?.[0]?.delta?.content; 
+                        if (c) {
+                            accumulatedContent += c;
+                            onChunk(c, accumulatedContent);
+                        }
+                    } catch (e) {}
                 }
             }
         }
@@ -379,6 +445,26 @@
 
         let chapterCount = 0;
         let allChapters = [];
+        
+        function scrollToTop() {
+            const storyContent = document.getElementById("storyContent");
+            storyContent.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        function scrollToBottom() {
+            const storyContent = document.getElementById("storyContent");
+            storyContent.scrollTo({ top: storyContent.scrollHeight, behavior: 'smooth' });
+        }
+
+        function updateScrollNavVisibility() {
+            const storyContent = document.getElementById("storyContent");
+            const scrollNavBtns = document.getElementById("scrollNavBtns");
+            if (storyContent && storyContent.scrollHeight > storyContent.clientHeight + 50) {
+                scrollNavBtns.classList.add("show");
+            } else {
+                scrollNavBtns.classList.remove("show");
+            }
+        }
 
                 window.addEventListener("load", () => {
             const savedApiKey = localStorage.getItem("apiKey");
@@ -501,6 +587,8 @@
             storyOutput.style.display = "block";
             chapterCount = 0;
             allChapters = [];
+            currentPage = 1;
+            isGenerating = true;
             chapterNav.classList.remove("show");
             storyContent.className = "story-content";
             storyContent.textContent = "";
@@ -523,7 +611,7 @@
                 await streamResponse(resp, function(chunk) {
                     fullText += chunk;
                     storyContent.textContent = fullText;
-                });
+                updateScrollNavVisibility();$2});
 
                 if (currentMode === "chapter") {
                     chapterCount = 1;
@@ -544,16 +632,21 @@
 
         async function generateNextChapter() {
             const totalChapters = parseInt(document.getElementById("totalChapters").value);
-            if (chapterCount >= totalChapters) { alert("已完成全部章节！"); return; }
+            if (chapterCount >= totalChapters) { 
+                alert("已完成全部章节！"); 
+                document.querySelector(".chapter-btn").disabled = true;
+                return; 
+            }
             const plot = document.getElementById("plot").value.trim();
             const worldbook = document.getElementById("worldbook").value.trim();
             const chapterLength = parseInt(document.getElementById("chapterLength").value);
             const storyContent = document.getElementById("storyContent");
-            const previousStory = allChapters.join("\n\n");
+            const previousStory = allChapters.join("\n\n---\n\n");
             const generateBtn = document.getElementById("generateBtn");
 
-            storyContent.className = "story-content";
-            storyContent.textContent = previousStory + "\n\n";
+            currentPage = allChapters.length + 1;
+            isGenerating = true;
+            updatePagination();
             generateBtn.disabled = true;
             generateBtn.textContent = "生成中...";
 
@@ -572,11 +665,9 @@
                 let newChapter = "";
                 await streamResponse(resp, function(chunk) {
                     newChapter += chunk;
-                    storyContent.textContent = previousStory + "\n\n---\n\n" + newChapter;
-                });
+                    storyContent.textContent = previousStory + "\n\n════════════════════════════════\n第 " + (chapterCount + 1) + " 章\n════════════════════════════════\n\n" + newChapter;
+                updateScrollNavVisibility();$2});
 
-                chapterCount++;
-                allChapters.push(newChapter);
                 document.getElementById("currentChapter").textContent = chapterCount;
                 if (chapterCount >= totalChapters) {
                     document.querySelector(".chapter-btn").disabled = true;
